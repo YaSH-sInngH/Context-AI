@@ -1,14 +1,15 @@
 import mongoose from "mongoose";
 import logger from "../utils/logger.js";
 
-const MONGO_URI = process.env.MONGO_URI;
-
-if(!MONGO_URI) {
-    logger.error("MONGO_URI is not defined in environment variables");
-    process.exit(1);
-}
-
 export const connectDB = async () => {
+    
+    const MONGO_URI = process.env.MONGO_URI;
+
+    if(!MONGO_URI) {
+        logger.error("MONGO_URI is not defined in environment variables");
+        process.exit(1);
+    }
+    
     try{
         mongoose.set('strictQuery', true);
 

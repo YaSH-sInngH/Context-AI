@@ -1,4 +1,3 @@
-import { act } from "react";
 import {generateToken, verifyToken} from "../config/jwt.js";
 import { User } from "../models/User.js";
 import logger from "./logger.js";

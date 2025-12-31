@@ -1,8 +1,8 @@
-import { User } from "../models/User";
+import { User } from "../models/User.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/tokenHelper.js";
 import logger from "../utils/logger.js";
 
-export class AuthService {
+export default class AuthService {
     // Local registration
     async register(userData) {
         try {
