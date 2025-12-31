@@ -74,21 +74,11 @@ const UserSchema = new mongoose.Schema({
     timestamps: true,
 });
 
-UserSchema.pre('save', async function(next) {
-    if(!this.isModified('password') || this.authMethod !== 'local') return next();
+UserSchema.pre('save', async function() {
+    if(!this.isModified('password') || this.authMethod !== 'local') return;
 
-    try {
-        const salt = await bcrypt.genSalt(10);
-        this.password = await bcrypt.hash(this.password, salt);
-        next();
-    } catch (error) {
-        next(error);
-    }
-});
-
-UserSchema.pre('save', function(next) {
-    this.updatedAt = Date.now();
-    next();
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
 });
 
 UserSchema.methods.comparePassword = async function(candidatePassword) {
@@ -102,11 +92,11 @@ UserSchema.methods.addRefreshToken = function(token, expiresAt) {
 };
 
 UserSchema.methods.removeRefreshToken = function(token) {
-    this.refreshTokens = this.refreshTokens.filter(t = t.token !== token);
+    this.refreshTokens = this.refreshTokens.filter(t => t.token !== token);
     return this.save();
 };
 
-UserSchema.methods.clearRereshTokens = function() {
+UserSchema.methods.clearRefreshTokens = function() {
     this.refreshTokens = [];
     return this.save();
 };

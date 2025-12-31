@@ -1,9 +1,10 @@
 import dotenv from 'dotenv';
-dotenv.config();
+dotenv.config({override: true});
 import app from './src/index.js';
-import {connectDB} from './src/config/database.js';
+import { connectDB } from './src/config/database.js';
 import logger from './src/utils/logger.js';
 const PORT = process.env.PORT || 5000;
+
 
 const startServer = async () => {
     try {

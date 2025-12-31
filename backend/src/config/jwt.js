@@ -1,4 +1,6 @@
 import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+dotenv.config();
 
 export const jwtConfig = {
     accessToken: {
@@ -10,6 +12,10 @@ export const jwtConfig = {
         expiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
     }
 }
+console.log('JWT_SECRET loaded:', process.env.JWT_SECRET);
+console.log('JWT_EXPIRES_IN loaded:', process.env.JWT_EXPIRES_IN);
+console.log('JWT_REFRESH_SECRET loaded:', process.env.JWT_REFRESH_SECRET);
+console.log('JWT_REFRESH_EXPIRES_IN loaded:', process.env.JWT_REFRESH_EXPIRES_IN);
 
 export const generateToken = (payload, type = 'access') => {
     const config = type === 'access' ? jwtConfig.accessToken : jwtConfig.refreshToken;
