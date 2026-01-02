@@ -14,6 +14,9 @@ const startServer = async () => {
             logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
             logger.info(`Health check: http://localhost:${PORT}/health`);
             logger.info(`API Documentation: http://localhost:${PORT}/api-docs`);
+            logger.info(`Auth: http://localhost:${PORT}/api/auth/*`);
+            logger.info(`Chat: http://localhost:${PORT}/api/chat/*`);
+            logger.info(`History: http://localhost:${PORT}/api/history/*`);
         });
 
         const shutdown = async () => {

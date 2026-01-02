@@ -8,6 +8,8 @@ import session from 'express-session';
 import {errorHandler} from './middlewares/errorHandler.js';
 import logger from './utils/logger.js';
 import authRoutes from './routes/authRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
+import historyRoutes from './routes/historyRoutes.js';
 
 const app = express();
 
@@ -42,6 +44,8 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/history', historyRoutes);
 
 app.use((req, res) => {
     res.status(404).json({

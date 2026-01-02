@@ -135,7 +135,7 @@ export class AuthController {
 
     async getProfile(req, res){
         try {
-            const user = await authService.getUserById(req.user._id);
+            const user = await authService.getProfile(req.user._id);
             return responseHandler.success(res, 'Profile fetched successfully', {
                 user: {
                     id: user._id,
@@ -156,7 +156,7 @@ export class AuthController {
 
     async updateProfile(req, res){
         try {
-            const user = await authService.updateUserProfile(req.user._id, req.body);
+            const user = await authService.updateProfile(req.user._id, req.body);
             return responseHandler.success(res, 'Profile updated successfully', {
                 user: {
                     id: user._id,
