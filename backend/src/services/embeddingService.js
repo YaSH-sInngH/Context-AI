@@ -3,8 +3,9 @@ import logger from '../utils/logger.js';
 
 class EmbeddingService {
     constructor() {
-        this.googleAI = aiConfig.getGoogleAI();
-        this.model = aiConfig.getEmbeddingModel();
+        this.cohere = aiConfig.getCohere();
+        this.model = aiConfig.getEmbedModel();
+        this.dimensions = aiConfig.getEmbeddingDimensions();
     }
 
     async generateEmbedding(text) {
@@ -13,27 +14,37 @@ class EmbeddingService {
                 throw new Error('Invalid text input for embedding');
             }
 
-            // Google Gemini embedding generation
-            const model = this.googleAI.getGenerativeModel({ 
-                model: this.model 
-            });
-
-            const result = await model.embedContent(text);
-            const embedding = result.embedding.values;
+            // Truncate very long texts (Cohere has limits)
+            const truncatedText = text.length > 2048 ? text.substring(0, 2048) : text;
             
-            if (!embedding || embedding.length === 0) {
+            const response = await this.cohere.embed({
+                texts: [truncatedText],
+                model: this.model,
+                inputType: 'search_document' // or 'search_query', 'classification', 'clustering'
+            });
+            
+            if (!response.embeddings || response.embeddings.length === 0) {
                 throw new Error('Failed to generate embedding: Empty response');
             }
             
-            logger.debug(`Embedding generated for text: ${text.substring(0, 50)}...`);
+            const embedding = response.embeddings[0];
+            
+            logger.debug(`Embedding generated for text: ${truncatedText.substring(0, 50)}...`);
             return embedding;
             
         } catch (error) {
-            logger.error('Embedding generation error:', error);
+            logger.error('Cohere embedding generation error:', error);
             
-            // Fallback to simple TF-IDF like embedding if Gemini fails
-            if (error.message.includes('quota') || error.message.includes('rate limit')) {
-                logger.warn('Using fallback embedding due to quota limits');
+            // Check for rate limits
+            if (error.status === 429 || error.message?.includes('rate limit')) {
+                logger.warn('Cohere rate limit reached, using fallback embedding');
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                return this.generateFallbackEmbedding(text);
+            }
+            
+            // Check for quota issues
+            if (error.status === 403 || error.message?.includes('quota')) {
+                logger.warn('Cohere quota exceeded, using fallback embedding');
                 return this.generateFallbackEmbedding(text);
             }
             
@@ -41,60 +52,80 @@ class EmbeddingService {
         }
     }
 
-    async generateBatchEmbeddings(texts) {
+    async generateBatchEmbeddings(texts, options = {}) {
         try {
             if (!Array.isArray(texts) || texts.length === 0) {
                 throw new Error('Invalid texts array for batch embedding');
             }
 
-            const model = this.googleAI.getGenerativeModel({ 
-                model: this.model 
-            });
+            // Truncate texts and prepare batch
+            const truncatedTexts = texts.map(text => 
+                text.length > 2048 ? text.substring(0, 2048) : text
+            );
 
-            // Process in batches to avoid rate limits
-            const batchSize = 5;
-            const allEmbeddings = [];
+            const response = await this.cohere.embed({
+                texts: truncatedTexts,
+                model: this.model,
+                inputType: options.inputType || 'search_document',
+                truncate: 'END' // or 'START', 'NONE'
+            });
             
-            for (let i = 0; i < texts.length; i += batchSize) {
-                const batch = texts.slice(i, i + batchSize);
-                const batchPromises = batch.map(text => 
-                    this.generateEmbedding(text).catch(err => {
-                        logger.error(`Failed embedding for batch item: ${err.message}`);
-                        return this.generateFallbackEmbedding(text);
-                    })
-                );
-                
-                const batchEmbeddings = await Promise.all(batchPromises);
-                allEmbeddings.push(...batchEmbeddings);
-                
-                // Small delay between batches to avoid rate limits
-                if (i + batchSize < texts.length) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
+            if (!response.embeddings || response.embeddings.length !== texts.length) {
+                throw new Error('Batch embedding response mismatch');
             }
             
-            logger.info(`Batch embeddings generated: ${allEmbeddings.length} texts`);
-            return allEmbeddings;
+            logger.info(`Batch embeddings generated: ${response.embeddings.length} texts`);
+            return response.embeddings;
             
         } catch (error) {
-            logger.error('Batch embedding generation error:', error);
+            logger.error('Cohere batch embedding error:', error);
             
-            // Fallback to individual embeddings
+            // Fallback to individual embeddings with delay
+            if (error.status === 429) {
+                logger.warn('Rate limited, processing individually with delays');
+                const embeddings = [];
+                for (const text of texts) {
+                    try {
+                        const embedding = await this.generateEmbedding(text);
+                        embeddings.push(embedding);
+                        await new Promise(resolve => setTimeout(resolve, 200)); // Delay between requests
+                    } catch (err) {
+                        logger.error(`Failed embedding for text: ${err.message}`);
+                        embeddings.push(this.generateFallbackEmbedding(text));
+                    }
+                }
+                return embeddings;
+            }
+            
+            // Ultimate fallback
             logger.warn('Using fallback batch embedding');
-            return Promise.all(
-                texts.map(text => this.generateFallbackEmbedding(text))
-            );
+            return texts.map(text => this.generateFallbackEmbedding(text));
         }
     }
 
-    // Simple fallback embedding (TF-IDF like) for when API fails
+    // Generate embeddings optimized for search queries
+    async generateQueryEmbedding(query) {
+        try {
+            const response = await this.cohere.embed({
+                texts: [query],
+                model: this.model,
+                inputType: 'search_query'
+            });
+            
+            return response.embeddings[0];
+        } catch (error) {
+            logger.error('Query embedding error:', error);
+            return this.generateFallbackEmbedding(query);
+        }
+    }
+
+    // Simple fallback embedding (deterministic)
     generateFallbackEmbedding(text) {
         try {
-            // Simple hash-based deterministic embedding (1536 dimensions like Ada-002)
-            const dimensions = 1536;
+            const dimensions = this.dimensions;
             const embedding = new Array(dimensions).fill(0);
             
-            // Simple tokenization and hash-based distribution
+            // Simple hash-based deterministic embedding
             const words = text.toLowerCase().split(/\s+/);
             words.forEach(word => {
                 // Simple hash function
@@ -106,13 +137,12 @@ class EmbeddingService {
                 
                 // Distribute across dimensions
                 const baseIndex = Math.abs(hash) % dimensions;
-                embedding[baseIndex] = (embedding[baseIndex] + 1) % 1.0;
+                embedding[baseIndex] = (embedding[baseIndex] + 0.1) % 1.0;
                 
                 // Distribute to neighboring dimensions
-                const neighbors = 3;
-                for (let j = 1; j <= neighbors; j++) {
+                for (let j = 1; j <= 3; j++) {
                     const idx = (baseIndex + j) % dimensions;
-                    embedding[idx] = (embedding[idx] + 1/(j+1)) % 1.0;
+                    embedding[idx] = (embedding[idx] + 0.05) % 0.5;
                 }
             });
             
@@ -126,15 +156,15 @@ class EmbeddingService {
             
         } catch (error) {
             logger.error('Fallback embedding error:', error);
-            // Return zero vector as last resort
-            return new Array(1536).fill(0);
+            return new Array(this.dimensions).fill(0);
         }
     }
 
     // Calculate cosine similarity
     cosineSimilarity(vecA, vecB) {
         if (!vecA || !vecB || vecA.length !== vecB.length) {
-            throw new Error('Vectors must have the same dimensions and not be null');
+            logger.error(`Vector dimension mismatch: ${vecA?.length} vs ${vecB?.length}`);
+            return 0;
         }
 
         let dotProduct = 0;
@@ -154,13 +184,13 @@ class EmbeddingService {
             return 0;
         }
 
-        return dotProduct / (normA * normB);
+        const similarity = dotProduct / (normA * normB);
+        return Math.max(0, Math.min(1, similarity)); // Clamp between 0 and 1
     }
 
-    // Utility function to validate embedding
     validateEmbedding(embedding) {
         return Array.isArray(embedding) && 
-               embedding.length > 0 && 
+               embedding.length === this.dimensions && 
                embedding.every(val => typeof val === 'number');
     }
 }

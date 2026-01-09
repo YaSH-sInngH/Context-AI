@@ -1,81 +1,134 @@
 import dotenv from 'dotenv';
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import Cohere from 'cohere-ai';
 
 dotenv.config();
 
 class AIConfig {
     constructor() {
-        this.googleAI = null;
-        this.models = {
-            chat: process.env.GOOGLE_CHAT_MODEL || 'gemini-pro',
-            embedding: process.env.GOOGLE_EMBEDDING_MODEL || 'embedding-001',
-            vision: 'gemini-pro-vision'  // Optional for image support
+        this.cohere = null;
+        this.availableModels = {
+            chat: {
+                'command': {
+                    name: 'command',
+                    description: 'Most capable model, good for complex tasks',
+                    contextLength: 4096,
+                    isLatest: false
+                },
+                'command-light': {
+                    name: 'command-light',
+                    description: 'Fast and efficient for simple tasks',
+                    contextLength: 4096,
+                    isLatest: false
+                },
+                'command-r': {
+                    name: 'command-r',
+                    description: 'Balanced model with 128K context',
+                    contextLength: 128000,
+                    isLatest: true
+                },
+                'command-r-plus': {
+                    name: 'command-r-plus',
+                    description: 'Most capable with 128K context',
+                    contextLength: 128000,
+                    isLatest: true
+                }
+            },
+            embed: {
+                'embed-english-v3.0': {
+                    name: 'embed-english-v3.0',
+                    description: 'English embeddings (1024 dimensions)',
+                    dimensions: 1024,
+                    isLatest: true
+                },
+                'embed-multilingual-v3.0': {
+                    name: 'embed-multilingual-v3.0',
+                    description: 'Multilingual embeddings (1024 dimensions)',
+                    dimensions: 1024,
+                    isLatest: true
+                },
+                'embed-english-light-v3.0': {
+                    name: 'embed-english-light-v3.0',
+                    description: 'Lightweight English embeddings',
+                    dimensions: 384,
+                    isLatest: true
+                }
+            },
+            rerank: {
+                'rerank-english-v3.0': {
+                    name: 'rerank-english-v3.0',
+                    description: 'English reranking model'
+                },
+                'rerank-multilingual-v3.0': {
+                    name: 'rerank-multilingual-v3.0',
+                    description: 'Multilingual reranking model'
+                }
+            }
         };
+        
+        // Default selections
+        this.models = {
+            chat: process.env.COHERE_CHAT_MODEL || 'command-r-plus',
+            embed: process.env.COHERE_EMBED_MODEL || 'embed-english-v3.0',
+            rerank: process.env.COHERE_RERANK_MODEL || 'rerank-english-v3.0'
+        };
+        
         this.settings = {
             temperature: parseFloat(process.env.LLM_TEMPERATURE) || 0.7,
             maxTokens: parseInt(process.env.MAX_TOKENS) || 1000,
             maxContextChunks: parseInt(process.env.MAX_CONTEXT_CHUNKS) || 5,
             similarityThreshold: parseFloat(process.env.SIMILARITY_THRESHOLD) || 0.7,
-            safetySettings: this.getSafetySettings()
+            topP: 0.75,
+            frequencyPenalty: 0.1,
+            presencePenalty: 0.1
         };
     }
 
-    initializeGoogleAI() {
-        if (!process.env.GOOGLE_GEMINI_API_KEY) {
-            throw new Error('GOOGLE_GEMINI_API_KEY is not configured');
+    initializeCohere() {
+        if (!process.env.COHERE_API_KEY) {
+            throw new Error('COHERE_API_KEY is not configured');
         }
         
-        this.googleAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY);
-        return this.googleAI;
+        console.log('🔧 Initializing Cohere with API key:', 
+            process.env.COHERE_API_KEY.substring(0, 10) + '...');
+        
+        this.cohere = new Cohere.CohereClient({
+            token: process.env.COHERE_API_KEY,
+        });
+        
+        return this.cohere;
     }
 
-    getGoogleAI() {
-        if (!this.googleAI) {
-            this.initializeGoogleAI();
+    getCohere() {
+        if (!this.cohere) {
+            this.initializeCohere();
         }
-        return this.googleAI;
+        return this.cohere;
     }
 
     getChatModel(modelName = null) {
-        return modelName || this.models.chat;
+        const model = modelName || this.models.chat;
+        return this.availableModels.chat[model]?.name || model;
     }
 
-    getEmbeddingModel() {
-        return this.models.embedding;
+    getEmbedModel() {
+        return this.models.embed;
     }
 
-    getSafetySettings() {
-        return [
-            {
-                category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-                threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            },
-            {
-                category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            },
-            {
-                category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            },
-            {
-                category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            },
-        ];
+    getRerankModel() {
+        return this.models.rerank;
     }
 
-    getGenerationConfig() {
-        return {
-            temperature: this.settings.temperature,
-            topP: 0.8,
-            topK: 40,
-            maxOutputTokens: this.settings.maxTokens,
-        };
+    getEmbeddingDimensions() {
+        const model = this.availableModels.embed[this.models.embed];
+        return model?.dimensions || 1024;
     }
 
     getSettings() {
         return this.settings;
+    }
+
+    getAvailableModels() {
+        return this.availableModels;
     }
 }
 
