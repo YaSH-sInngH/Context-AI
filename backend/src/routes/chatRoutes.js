@@ -21,7 +21,7 @@ const chatValidation = {
 
     body("model")
       .optional()
-      .isIn(["gpt-3.5-turbo", "gpt-4", "gemini-pro", "claude-3-haiku"])
+      .isIn(["command", "command-light", "command-r", "command-r-plus"])
       .withMessage("Invalid model"),
 
     body("settings.temperature")
