@@ -52,7 +52,7 @@ class VectorService {
                 content,
                 metadata,
                 embeddingId,
-                embeddingModel: process.env.EMBEDDING_MODEL || 'text-embedding-ada-002'
+                embeddingModel: process.env.COHERE_EMBEDDING_MODEL
             });
 
             await vectorDoc.save();
